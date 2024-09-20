@@ -1,0 +1,52 @@
+version: '3'
+services:
+  rabbitmq:
+    image: "rabbitmq:management"
+    privileged: true
+    ports:
+      - "5672:5672"  # RabbitMQ message broker port
+      - "15672:15672"  # RabbitMQ management UI port
+
+  db:
+    image: "postgres:12-bullseye"
+    privileged: true
+    user: root
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+      - "dbdata:/var/lib/postgresql/data"
+
+  celery_worker:
+    build: .
+    privileged: true
+    volumes:
+      - ./celery_app:/app
+    command: celery -A tasks worker --loglevel=info
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+
+    depends_on:
+      - rabbitmq
+      - db
+  celery_beat:
+    build: .
+    volumes:
+      - ./celery_app:/app
+    command: celery -A tasks beat --loglevel=info
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    depends_on:
+      - rabbitmq
+      - db
+      - celery_worker
+volumes:
+  dbdata:
